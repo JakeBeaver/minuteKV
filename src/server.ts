@@ -2,18 +2,12 @@ import http from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { PORT } from './config.ts';
-import * as rateLimiter from './rateLimiter.ts';
 import * as auth from './auth.ts';
 import * as routes from './routes.ts';
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const ip = req.socket.remoteAddress ?? 'unknown';
   const key = (req.url ?? '').slice(1);
   const admin = auth.isAdmin(req);
-
-  if (!admin && !rateLimiter.allow(ip)) {
-    return routes.handleRateLimited(res);
-  }
 
   if (!key) {
     return routes.handleMissingKey(res);
@@ -24,7 +18,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
 
   if (req.method === 'POST') {
-    return routes.handlePost(key, req, res);
+    return routes.handlePost(key, req, res, admin);
   }
 
   return routes.handleMethodNotAllowed(res);

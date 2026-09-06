@@ -20,9 +20,9 @@ export async function handleGet(key: string, res: ServerResponse): Promise<void>
   res.end(value);
 }
 
-export async function handlePost(key: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handlePost(key: string, req: IncomingMessage, res: ServerResponse, isAdmin: boolean): Promise<void> {
   const body = await readBody(req);
-  kvStore.set(key, body);
+  kvStore.set(key, body, isAdmin);
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('OK');
 }
@@ -35,9 +35,4 @@ export function handleMethodNotAllowed(res: ServerResponse): void {
 export function handleMissingKey(res: ServerResponse): void {
   res.writeHead(400, { 'Content-Type': 'text/plain' });
   res.end('Missing key in path, e.g. /abc');
-}
-
-export function handleRateLimited(res: ServerResponse): void {
-  res.writeHead(429, { 'Content-Type': 'text/plain', 'Retry-After': '1' });
-  res.end('Rate limit exceeded');
 }

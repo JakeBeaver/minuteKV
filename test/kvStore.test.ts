@@ -66,3 +66,73 @@ test('separate store instances do not share state', () => {
   storeA.set('a', '1');
   assert.equal(storeB.get('a'), undefined);
 });
+
+test('overwriting an existing key never evicts anything, even at capacity', () => {
+  const store = createKvStore(1000, 2);
+  store.set('a', '1');
+  store.set('b', '2');
+  assert.equal(store.size(), 2);
+
+  store.set('a', 'updated'); // overwrite, not a new key
+  assert.equal(store.size(), 2);
+  assert.equal(store.get('a'), 'updated');
+  assert.equal(store.get('b'), '2');
+});
+
+test('a new key past capacity evicts the oldest non-admin key', () => {
+  const store = createKvStore(1000, 2);
+  store.set('a', '1');
+  store.set('b', '2');
+
+  store.set('c', '3'); // new key, store full -> oldest ('a') is evicted
+  assert.equal(store.size(), 2);
+  assert.equal(store.get('a'), undefined);
+  assert.equal(store.get('b'), '2');
+  assert.equal(store.get('c'), '3');
+});
+
+test('admin-written keys are skipped when evicting for space', () => {
+  const store = createKvStore(1000, 2);
+  store.set('admin-key', 'protected', true);
+  store.set('b', '2');
+
+  // Store is full; 'admin-key' is oldest but admin-owned, so 'b' (the
+  // oldest non-admin key) is evicted instead.
+  store.set('c', '3');
+  assert.equal(store.size(), 2);
+  assert.equal(store.get('admin-key'), 'protected');
+  assert.equal(store.get('b'), undefined);
+  assert.equal(store.get('c'), '3');
+});
+
+test('if every stored key is admin-owned, the oldest is evicted anyway to hold the cap', () => {
+  const store = createKvStore(1000, 2);
+  store.set('a', '1', true);
+  store.set('b', '2', true);
+
+  store.set('c', '3', true);
+  assert.equal(store.size(), 2);
+  assert.equal(store.get('a'), undefined); // oldest, evicted despite being admin
+  assert.equal(store.get('b'), '2');
+  assert.equal(store.get('c'), '3');
+});
+
+test('a key overwritten by a non-admin write loses its admin protection', () => {
+  const store = createKvStore(1000, 2);
+  store.set('a', 'first', true);
+  store.set('b', '2');
+  store.set('a', 'second', false); // same key, now written by a non-admin
+
+  // 'a' is now the most-recently-written key, but no longer admin-owned.
+  store.set('c', '3'); // new key, store full -> oldest non-admin is 'b'
+  assert.equal(store.get('b'), undefined);
+  assert.equal(store.get('a'), 'second');
+  assert.equal(store.get('c'), '3');
+});
+
+test('timeout eviction applies to admin-written keys too', async () => {
+  const store = createKvStore(30);
+  store.set('admin-key', 'value', true);
+  await delay(80);
+  assert.equal(store.get('admin-key'), undefined);
+});

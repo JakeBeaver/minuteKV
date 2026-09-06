@@ -46,10 +46,17 @@ test('handleGet returns 200 and the value for a present key', async () => {
 
 test('handlePost stores the request body and returns 200', async () => {
   const res = fakeRes();
-  await routes.handlePost('routes-test-post', fakeReq('posted-body') as any, res as any);
+  await routes.handlePost('routes-test-post', fakeReq('posted-body') as any, res as any, false);
   assert.equal(res.statusCode, 200);
   assert.equal(res.body, 'OK');
   assert.equal(kvStore.get('routes-test-post'), 'posted-body');
+});
+
+test('handlePost tags the stored key as admin-owned when isAdmin is true', async () => {
+  const res = fakeRes();
+  await routes.handlePost('routes-test-admin', fakeReq('admin-body') as any, res as any, true);
+  assert.equal(res.statusCode, 200);
+  assert.equal(kvStore.get('routes-test-admin'), 'admin-body');
 });
 
 test('handleMethodNotAllowed returns 405', () => {
@@ -62,11 +69,4 @@ test('handleMissingKey returns 400', () => {
   const res = fakeRes();
   routes.handleMissingKey(res as any);
   assert.equal(res.statusCode, 400);
-});
-
-test('handleRateLimited returns 429 with Retry-After', () => {
-  const res = fakeRes();
-  routes.handleRateLimited(res as any);
-  assert.equal(res.statusCode, 429);
-  assert.equal(res.headers?.['Retry-After'], '1');
 });
