@@ -6,6 +6,11 @@ A tiny perishable key-value HTTP service.
   it was last written.
 - **Rate limited**: a token-bucket limiter caps each client IP at
   `RATE_LIMIT` requests per `RATE_WINDOW_MS` (default 10 requests / 10s).
+  Per-client state lives in one global map capped at
+  `RATE_LIMITER_MAX_CLIENTS` distinct clients; if a never-before-seen IP
+  shows up while it's full, the least-recently-seen client is evicted to
+  make room (it just starts over with a full bucket if it comes back).
+  Traffic from a client already being tracked never triggers an eviction.
 - **Admin key**: a request carrying the correct `x-api-key` header bypasses
   the rate limiter entirely, so legitimate bulk/admin traffic can't be
   starved by the same leaky bucket that protects the service from abuse.
@@ -30,6 +35,7 @@ Configure via environment variables:
 | ---------------- | -------------------- | --------------------------------------- |
 | `ADMIN_API_KEY`  | `change-me-please`   | Value required in the `x-api-key` header to bypass rate limiting. **Set this in any real deployment.** |
 | `PORT`           | `3000`               | HTTP port to listen on.                 |
+| `RATE_LIMITER_MAX_CLIENTS` | `10000`     | Max distinct client IPs tracked by the rate limiter at once, LRU-evicted beyond that. |
 
 ## API
 
