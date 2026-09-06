@@ -1,0 +1,13 @@
+{
+  "name": "minutekv",
+  "version": "1.0.0",
+  "description": "A tiny perishable key-value HTTP service with token-bucket rate limiting and an admin key that bypasses it.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "test": "node --test"
+  }
+}
