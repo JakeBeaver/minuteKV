@@ -1,0 +1,20 @@
+# No Dockerfile: the app has zero runtime dependencies and no build step
+# (plain TypeScript run via Node's built-in type stripping), so the stock
+# node:alpine image plus a bind mount of the source is enough.
+services:
+  minutekv:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+    # Compose also auto-loads a neighboring .env for ${...} substitution
+    # in this file (e.g. the port mapping below); env_file additionally
+    # passes those same variables into the container's process env, which
+    # is what config.ts actually reads them from.
+    env_file:
+      - .env
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    user: node
+    command: npm start
+    restart: unless-stopped

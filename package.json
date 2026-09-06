@@ -1,7 +1,7 @@
 {
   "name": "minutekv",
   "version": "1.0.0",
-  "description": "A tiny perishable key-value HTTP service with token-bucket rate limiting and an admin key that bypasses it.",
+  "description": "A tiny perishable key-value HTTP service with capacity-bounded eviction and an admin key that protects writes from it.",
   "type": "module",
   "engines": {
     "node": ">=22.6.0"
