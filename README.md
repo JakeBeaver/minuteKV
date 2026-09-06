@@ -26,15 +26,21 @@ properties.
 npm start
 # or directly:
 node src/server.ts
+
+# loading config from a .env file:
+node --env-file=.env src/server.ts
 ```
 
 Configure via environment variables:
 
 | Variable         | Default              | Meaning                                |
 | ---------------- | -------------------- | --------------------------------------- |
-| `ADMIN_API_KEY`  | `change-me-please`   | Value required in the `x-api-key` header to write an admin-protected key. **Set this in any real deployment.** |
+| `ADMIN_API_KEY`  | *(unset)*            | Value required in the `x-api-key` header to write an admin-protected key. Unset means admin auth is unavailable entirely — no header value authenticates, not even a well-known default. **Set this in any real deployment.** |
 | `PORT`           | `3000`               | HTTP port to listen on.                 |
 | `MAX_ENTRIES`    | `10000`              | Max keys held at once; writing past this evicts the oldest non-admin key. |
+| `MAX_ENTRY_LENGTH` | `65536`            | Max combined length, in characters, of a key + its value. Writes over this return `413`. |
+
+A `.env` file is a reasonable way to set these locally; `.env*` is gitignored so it's never accidentally committed.
 
 ## API
 
@@ -52,6 +58,7 @@ curl localhost:3000/foo
 # hello
 
 # write an admin-protected key, immune to capacity eviction
+# (requires ADMIN_API_KEY to be set when the server was started)
 curl -X POST -H "x-api-key: $ADMIN_API_KEY" localhost:3000/foo -d 'hello'
 ```
 

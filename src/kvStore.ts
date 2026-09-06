@@ -40,6 +40,10 @@ export function createKvStore(evictionMs: number = EVICTION_MS, maxEntries: numb
 
   function evictOldest(): void {
     let fallback: string | undefined;
+    // A JS Map (unlike a mathematical set) is spec-guaranteed to iterate
+    // in insertion order, and every write above re-inserts the key via
+    // delete-then-set — so the first non-admin entry this loop reaches is
+    // genuinely the oldest one still in the store.
     for (const [key, entry] of store) {
       if (!entry.isAdmin) {
         remove(key);
@@ -82,10 +86,6 @@ export function createKvStore(evictionMs: number = EVICTION_MS, maxEntries: numb
 }
 
 // Default, process-wide store used by the running server.
-const defaultStore = createKvStore();
+const defaultStore: KvStore = createKvStore();
 
-export const set = defaultStore.set;
-export const get = defaultStore.get;
-export const has = defaultStore.has;
-export const remove = defaultStore.remove;
-export const size = defaultStore.size;
+export default defaultStore;

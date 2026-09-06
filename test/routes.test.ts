@@ -1,8 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import * as routes from '../src/routes.ts';
-import * as kvStore from '../src/kvStore.ts';
+
+// Small on purpose, so the size-limit tests below don't need huge bodies.
+// Must be set before kvStore.ts/routes.ts (and their import of config.ts)
+// are evaluated — and since static imports are hoisted above this
+// assignment regardless of where they're written, both are imported
+// dynamically here rather than statically at the top of the file.
+process.env.MAX_ENTRY_LENGTH = '10';
+const kvStore = (await import('../src/kvStore.ts')).default;
+const routes = await import('../src/routes.ts');
 
 /** Minimal fake ServerResponse that records what handlers write. */
 function fakeRes() {
@@ -21,8 +28,10 @@ function fakeRes() {
 }
 
 /** Minimal fake IncomingMessage: an EventEmitter that emits a body then ends. */
-function fakeReq(body = ''): EventEmitter {
-  const req = new EventEmitter();
+function fakeReq(body = ''): EventEmitter & { destroy?: () => void; resume?: () => void } {
+  const req = new EventEmitter() as EventEmitter & { destroy?: () => void; resume?: () => void };
+  req.destroy = () => {};
+  req.resume = () => {};
   queueMicrotask(() => {
     if (body) req.emit('data', Buffer.from(body));
     req.emit('end');
@@ -46,17 +55,30 @@ test('handleGet returns 200 and the value for a present key', async () => {
 
 test('handlePost stores the request body and returns 200', async () => {
   const res = fakeRes();
-  await routes.handlePost('routes-test-post', fakeReq('posted-body') as any, res as any, false);
+  await routes.handlePost('short', fakeReq('fits') as any, res as any, false);
   assert.equal(res.statusCode, 200);
   assert.equal(res.body, 'OK');
-  assert.equal(kvStore.get('routes-test-post'), 'posted-body');
+  assert.equal(kvStore.get('short'), 'fits');
 });
 
 test('handlePost tags the stored key as admin-owned when isAdmin is true', async () => {
   const res = fakeRes();
-  await routes.handlePost('routes-test-admin', fakeReq('admin-body') as any, res as any, true);
+  await routes.handlePost('admin-k', fakeReq('yes') as any, res as any, true);
   assert.equal(res.statusCode, 200);
-  assert.equal(kvStore.get('routes-test-admin'), 'admin-body');
+  assert.equal(kvStore.get('admin-k'), 'yes');
+});
+
+test('handlePost returns 413 when key + value exceed MAX_ENTRY_LENGTH', async () => {
+  const res = fakeRes();
+  await routes.handlePost('k', fakeReq('way-too-long-for-the-limit') as any, res as any, false);
+  assert.equal(res.statusCode, 413);
+  assert.equal(kvStore.get('k'), undefined);
+});
+
+test('handlePost returns 413 when the key alone already exceeds MAX_ENTRY_LENGTH', async () => {
+  const res = fakeRes();
+  await routes.handlePost('a-key-longer-than-ten-chars', fakeReq('') as any, res as any, false);
+  assert.equal(res.statusCode, 413);
 });
 
 test('handleMethodNotAllowed returns 405', () => {
@@ -69,4 +91,10 @@ test('handleMissingKey returns 400', () => {
   const res = fakeRes();
   routes.handleMissingKey(res as any);
   assert.equal(res.statusCode, 400);
+});
+
+test('handleEntryTooLarge returns 413', () => {
+  const res = fakeRes();
+  routes.handleEntryTooLarge(res as any);
+  assert.equal(res.statusCode, 413);
 });

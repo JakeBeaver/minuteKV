@@ -1,11 +1,26 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import * as kvStore from './kvStore.ts';
+import kvStore from './kvStore.ts';
+import { MAX_ENTRY_LENGTH } from './config.ts';
 
-function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve) => {
+/**
+ * Reads the request body, resolving `null` instead of the body once
+ * `maxLength` characters have been exceeded. Keeps draining the stream
+ * (rather than destroying it) even after that point: on a real socket,
+ * destroying the request also tears down the response side of the same
+ * HTTP/1.1 connection, which would kill the connection before an error
+ * response could be sent back.
+ */
+function readBody(req: IncomingMessage, maxLength: number): Promise<string | null> {
+  return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', (chunk) => { body += chunk; });
-    req.on('end', () => resolve(body));
+    let tooLarge = false;
+    req.on('data', (chunk: Buffer) => {
+      if (tooLarge) return;
+      body += chunk;
+      if (body.length > maxLength) tooLarge = true;
+    });
+    req.on('end', () => resolve(tooLarge ? null : body));
+    req.on('error', reject);
   });
 }
 
@@ -21,7 +36,15 @@ export async function handleGet(key: string, res: ServerResponse): Promise<void>
 }
 
 export async function handlePost(key: string, req: IncomingMessage, res: ServerResponse, isAdmin: boolean): Promise<void> {
-  const body = await readBody(req);
+  if (key.length > MAX_ENTRY_LENGTH) {
+    req.resume(); // drain and discard the body we're not going to read
+    return handleEntryTooLarge(res);
+  }
+
+  const body = await readBody(req, MAX_ENTRY_LENGTH - key.length);
+  if (body === null) {
+    return handleEntryTooLarge(res);
+  }
   kvStore.set(key, body, isAdmin);
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('OK');
@@ -35,4 +58,9 @@ export function handleMethodNotAllowed(res: ServerResponse): void {
 export function handleMissingKey(res: ServerResponse): void {
   res.writeHead(400, { 'Content-Type': 'text/plain' });
   res.end('Missing key in path, e.g. /abc');
+}
+
+export function handleEntryTooLarge(res: ServerResponse): void {
+  res.writeHead(413, { 'Content-Type': 'text/plain' });
+  res.end(`Key + value must not exceed ${MAX_ENTRY_LENGTH} characters`);
 }

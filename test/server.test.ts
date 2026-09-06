@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net';
 // Must be set before server.ts (and its import of config.ts) is evaluated.
 process.env.ADMIN_API_KEY = 'test-admin-key';
 process.env.MAX_ENTRIES = '2'; // small, so capacity eviction is easy to trigger
+process.env.MAX_ENTRY_LENGTH = '20'; // small, so the size-limit test is cheap
 const { createServer } = await import('../src/server.ts');
 
 let server: Server;
@@ -66,6 +67,15 @@ test('MAX_ENTRIES=2: writing new keys past capacity evicts old ones', async () =
   assert.equal(c, 200);
   // ...and the cap holds: not all three can still be present.
   assert.ok(a === 404 || b === 404, 'expected the cap to have evicted an older key');
+});
+
+test('MAX_ENTRY_LENGTH=20: a key + value combination over the limit returns 413', async () => {
+  const res = await fetch(`${baseUrl}/oversized-entry-key`, {
+    method: 'POST',
+    body: 'this body pushes the combined length well past the limit',
+  });
+  assert.equal(res.status, 413);
+  assert.equal((await fetch(`${baseUrl}/oversized-entry-key`)).status, 404);
 });
 
 test('an admin-written key survives capacity pressure from other clients', async () => {
